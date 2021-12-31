@@ -94,6 +94,7 @@ fixetype[3] = "DGPS"
 local options = {
 	{ "Cells", VALUE, 3, 2, 12 },			-- lipo cells
 	{ "Mode", SOURCE, 1},			        -- switch for toggle screens
+	{ "Crsf", VALUE, 1},			        -- switch for crsf support
 	{ "Template", VALUE, 1, 1, 3 },	        -- widget templates
 }
 
@@ -143,26 +144,10 @@ local function widget(modeSwitch, template)
 	-- {{column1-row1,column1-row2,column1-row3},{column2-row1,column2-row2,column2-row3},{etc}}
 	
 	-- 3 examples of widget definitions with 3 screens, you can even add more
-	if     template == 1 and switchPos <  0 then
-		widgetDefinition = {{"mavtype", "armed", "fm"},{"ap_batt", 0, "timer"},{"ap_volt", "ap_curr", "rssi"},}
-	elseif template == 1 and switchPos == 0 then
-		widgetDefinition = {{"gps", "ap_alt", "ap_msl"},{"ap_dist", "ap_speed",1}}
-	elseif template == 1 and switchPos >  0 then
-		widgetDefinition = {{"ap_roll", "ap_pitch", "ap_yaw"},{"hud_hdg"},{"hdg",1,1}}
-		
-	elseif template == 2 and switchPos <  0 then
-		widgetDefinition = {{"mavtype", "armed", "fm", "timer"},{"ap_batt", 0, 0, "rxbat"},{"ap_volt", "ap_curr", "ap_drawn", "rssi"},{"gps", "ap_alt", "ap_speed", "ap_dist"}}
-	elseif template == 2 and switchPos == 0 then
-		widgetDefinition = {{"ap_roll", "ap_pitch", "ap_yaw", 1},{"hud_hdg"},{"gps", "ap_alt", "ap_speed", "ap_dist"}}
-	elseif template == 2 and switchPos >  0 then
-		widgetDefinition = {{"msg"}}
-		
-	elseif template == 3 and switchPos <  0 then
-		widgetDefinition = {{"mavtype", "armed", "fm", "timer"},{"ap_batt", 0, 0, "rxbat"},{"ap_volt", "ap_curr", "ap_drawn", "rssi"},{"gps", "ap_alt", "ap_speed", "ap_dist"}}
-	elseif template == 3 and switchPos == 0 then
-		widgetDefinition = {{"ap_roll", "ap_pitch", "ap_yaw", 1},{"hud_hdg"},{"gps", "ap_alt", "ap_speed", "ap_dist"}}
-	elseif template == 3 and switchPos >  0 then
-		widgetDefinition = {{"msg"}}
+	if     template == 1 then
+		widgetDefinition = {{"crsf_roll", "crsf_yaw", "crsf_pitch"},{"hud_hdg"},{"speed", "curr", "alt"},}
+	elseif template == 2 then
+		widgetDefinition = {{"crsf_UPSNR", "crsf_DNSNR", "crsf_RQly"},{"crsf_batt", 0, 0, "rxbat"},{"crsf_RFMD","crsf_TPWR"}}
 	else
 		widgetDefinition = {{"ERROR"}}
 	end
@@ -464,8 +449,13 @@ local function batteryWidget(xCoord, yCoord, cellWidth, cellHeight, name, contex
 	local myVoltage
 	local myPercent = 0
 	local battCell  = context.options.Cells.."S"
-	-- local battCapa  = getValueOrDefault("CAP")
-	local battCapa  = model.getGlobalVariable(1, 0)*10
+	local battCapa  = 0
+	if context.options.Crsf == 1 then 
+		battCapa  = getValueOrDefault("crsf_capa")
+	else
+		battCapa = model.getGlobalVariable(1, 0)*10
+	end
+	
 	
 	local _6SL = 21      -- 6 cells 6s | Warning
     local _6SH = 25.2    -- 6 cells 6s
@@ -481,6 +471,8 @@ local function batteryWidget(xCoord, yCoord, cellWidth, cellHeight, name, contex
 		myVoltage = getValueOrDefault("VFAS")
 	elseif name == "ap_batt" then
 		myVoltage = getValueOrDefault("VOL")
+	elseif name == "crsf_batt" then
+		myVoltage = getValueOrDefault("RxBt")
 	end
 	
 	
@@ -557,9 +549,15 @@ end
 -------------------------------------------------
 local function drawHud(xCoord, yCoord, cellWidth, cellHeight, name, img, context)
 	local hudImage
- 	local rol = getValueOrDefault("ROL")
- 	local pit = getValueOrDefault("PIT")
- 	
+ 	local rol = 0
+ 	local pit = 0
+ 	if context.options.Crsf == 1 then 
+		rol = getValueOrDefault("Roll")
+		pit = getValueOrDefault("Ptch")
+	else
+		rol = getValueOrDefault("ROL")
+		pit = getValueOrDefault("PIT")
+	end
 	local size      = cellWidth/2
 	local x_offset  = xCoord + (cellWidth-size)/2
 	local y_offset  = yCoord + (cellWidth-size)/2
@@ -618,7 +616,11 @@ local function drawHud(xCoord, yCoord, cellWidth, cellHeight, name, img, context
 	if name == "hud" then
 		hudImage = Bitmap.open(context.imagePath.."hud.png")
 	elseif name == "hud_hdg" then
+	if context.options.Crsf == 1 then 
+		myImgValue = getValueOrDefault("Yaw")
+	else
 		myImgValue = getValueOrDefault("YAW")
+	end
 		hdgIndex = math.floor (myImgValue/15+0.5)   --+1
 		if hdgIndex > 23 then hdgIndex = 23 end		-- ab 352 Grad auf Index 23
 		hudImage = Bitmap.open(context.imagePath.."hud"..hdgIndex..".png")
@@ -635,7 +637,7 @@ local function callWidget(name, xPos, yPos, width, height, context)
 		-- special widgets / txt widgets
 		if (name == "msg") then
 			msgWidget(    xPos, yPos, width, height, name,      context)
-		elseif (name == "vfas" or name == "ap_batt") then
+		elseif (name == "vfas" or name == "ap_batt" or name == "crsf_batt") then
 			batteryWidget(xPos, yPos, width, height, name,      context)
 		elseif (name == "armed") then
 			armedWidget(  xPos, yPos, width, height, name, 1,   context)
@@ -673,9 +675,31 @@ local function callWidget(name, xPos, yPos, width, height, context)
 		elseif (name == "hdg") then
 			stdWidget(xPos,  yPos,   width, height, name, "Hdg",       "Heading",     "dg",   1,   nil,        nil, context)
 			
+		-- standard sensor widgets called with crsf sensors
+		elseif (name == "crsf_pitch") then
+			stdWidget(xPos,  yPos,   width, height, name,  "Ptch",      "Pitch",       "dg",   1, nil,        nil, context)
+		elseif (name == "crsf_roll") then
+			stdWidget(xPos,  yPos,   width, height, name,  "Roll",      "Roll",        "dg",   1, nil,        nil, context)
+		elseif (name == "crsf_yaw") then
+			stdWidget(xPos,  yPos,   width, height, name,  "Yaw",      "Yaw",         "dg",   1, nil,        nil, context)
+		elseif (name == "crsf_sat") then
+			stdWidget(xPos,  yPos,   width, height, name,  "Sats",      "Sats",         "",   nil, nil,        nil, context)
+		elseif (name == "crsf_capa") then
+			stdWidget(xPos,  yPos,   width, height, name,  "Capa",      "Capacity",         "mAh",   nil, nil,        nil, context)
+		elseif (name == "crsf_UPSNR") then
+			stdWidget(xPos,  yPos,   width, height, name,  "RSNR",      "up_SNR",         "dB",   nil, nil,        nil, context)
+		elseif (name == "crsf_DNSNR") then
+			stdWidget(xPos,  yPos,   width, height, name,  "TSNR",      "dn_snr",         "dB",   nil, nil,        nil, context)
+		elseif (name == "crsf_RQly") then
+			stdWidget(xPos,  yPos,   width, height, name,  "RQly",      "RQly",         "",   nil, nil,        nil, context)
+		elseif (name == "crsf_RFMD") then
+			stdWidget(xPos,  yPos,   width, height, name,  "RFMD",      "RFMD",         "",   nil, nil,        nil, context)
+		elseif (name == "crsf_TPWR") then
+			stdWidget(xPos,  yPos,   width, height, name,  "TPWR",      "TPWR",         "mW",   nil, nil,        nil, context)
+			
 		-- standard widgets called with passthrough telemetry sensors
 		elseif (name == "ap_alt") then
-			stdWidget(xPos,  yPos,   width, height, name,  "ALT",      "AGL",         "m",    1,   "ALT+",     nil, context)
+			stdWidget(xPos,  yPos,   width, height, name,  "Alt",      "AGL",         "m",    1,   "ALT+",     nil, context)
 		elseif (name == "ap_vdp") then
 			stdWidget(xPos,  yPos,   width, height, name,  "VDP",      "VDOP",        "m",    1,   nil,        nil, context)
 		elseif (name == "ap_hdp") then
@@ -693,11 +717,11 @@ local function callWidget(name, xPos, yPos, width, height, context)
 		elseif (name == "ap_drawn") then
 			stdWidget(xPos,  yPos,   width, height, name,  "DRW",      "Used",        "mAh",  nil, nil,        nil, context)
 		elseif (name == "ap_yaw") then
-			stdWidget(xPos,  yPos,   width, height, name,  "YAW",      "Yaw",         "dg",   nil, nil,        nil, context)
+			stdWidget(xPos,  yPos,   width, height, name,  "Hdg",      "Yaw",         "dg",   nil, nil,        nil, context)
 		elseif (name == "ap_pitch") then
-			stdWidget(xPos,  yPos,   width, height, name,  "PIT",      "Pitch",       "dg",   nil, nil,        nil, context)
+			stdWidget(xPos,  yPos,   width, height, name,  "Ptch",      "Pitch",       "dg",   nil, nil,        nil, context)
 		elseif (name == "ap_roll") then
-			stdWidget(xPos,  yPos,   width, height, name,  "ROL",      "Roll",        "dg",   nil, nil,        nil, context)
+			stdWidget(xPos,  yPos,   width, height, name,  "Roll",      "Roll",        "dg",   nil, nil,        nil, context)
 			
 		elseif (name == "ERROR") then
 			stdWidget(xPos,  yPos,   width, height, name,  "ERROR",    "error",       nil,    nil, nil,        nil, context)
