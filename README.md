@@ -1,4 +1,4 @@
-# Horus-Mavlink-Telemetry
+# Horus-Mavlink-Telemetry - modified for crossfire use
 A universal lua script for displaying mavlink values on FrSky Horus OpenTX
 
 This Lua Widget script shows varius Mavlink Data and / or standard sensors data and values on your screen.
@@ -47,6 +47,10 @@ https://github.com/opentx/opentx/issues/5818
 2. Variables and functions should not be global in the Lua environment
 3. It is best to pass all variables via the create () object
 
+## Modifications for Mavlink telemetry with CRSF:
+1. you can use most of the widgets with only mavlink connected to an RX.
+2. parameters for crossfire added (crsf_* instead of AP_*)
+3. switch in widget settings to switch between passthrough and CRSF.
 
 ## Known Bugs and issues:
 1. hud horizon disapears some time
